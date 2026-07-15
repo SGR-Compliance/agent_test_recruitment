@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: TaskFlow API
+  description: >
+    API REST per gestire utenti e task, scritta in Flask con storage in-memory.
+    Nessun dato viene persistito su disco: riavviando il server, utenti e task
+    vengono azzerati.
+  version: "1.0.0"
+servers:
+  - url: http://127.0.0.1:5000
+    description: Server locale di sviluppo
+
+tags:
+  - name: auth
+    description: Registrazione e login
+  - name: tasks
+    description: Gestione dei task
+
+paths:
+  /register:
+    post:
+      tags: [auth]
+      summary: Crea un nuovo utente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: alice
+                password:
+                  type: string
+                  format: password
+                  example: secret
+      responses:
+        "201":
+          description: Utente creato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: user created
+                  username:
+                    type: string
+                    example: alice
+        "400":
+          description: username o password mancanti
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Utente gia' esistente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /login:
+    post:
+      tags: [auth]
+      summary: Login utente, restituisce un token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: alice
+                password:
+                  type: string
+                  format: password
+                  example: secret
+      responses:
+        "200":
+          description: Login riuscito
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        "401":
+          description: Credenziali non valide
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /tasks:
+    get:
+      tags: [tasks]
+      summary: Lista i task dell'utente autenticato (paginata)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Lista task
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  page:
+                    type: integer
+                  per_page:
+                    type: integer
+                  total:
+                    type: integer
+                  tasks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Task"
+        "401":
+          description: Non autenticato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags: [tasks]
+      summary: Crea un nuovo task
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  example: Comprare il latte
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                  default: medium
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  example: ["spesa"]
+      responses:
+        "201":
+          description: Task creato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: Dati non validi (title mancante o priority non valida)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Non autenticato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /tasks/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags: [tasks]
+      summary: Dettaglio di un task
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Task trovato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          description: Non autenticato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Task non trovato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      tags: [tasks]
+      summary: Aggiorna un task
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                priority:
+                  type: string
+                  enum: [low, medium, high]
+                status:
+                  type: string
+                  enum: [todo, in_progress, done]
+      responses:
+        "200":
+          description: Task aggiornato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          description: Non autenticato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Il task appartiene a un altro utente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Task non trovato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      tags: [tasks]
+      summary: Elimina un task
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Task eliminato
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: deleted
+        "401":
+          description: Non autenticato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Task non trovato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /tasks/stats:
+    get:
+      tags: [tasks]
+      summary: Statistiche sui task dell'utente autenticato
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Statistiche
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  done:
+                    type: integer
+                  completion_rate:
+                    type: number
+                    format: float
+                  by_priority:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        "401":
+          description: Non autenticato
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Token restituito da /login. Va inviato come header
+        "Authorization: Bearer <token>".
+  schemas:
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        owner:
+          type: string
+          example: alice
+        title:
+          type: string
+          example: Comprare il latte
+        priority:
+          type: string
+          enum: [low, medium, high]
+          example: high
+        status:
+          type: string
+          enum: [todo, in_progress, done]
+          example: todo
+        tags:
+          type: array
+          items:
+            type: string
+          example: ["spesa"]
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: unauthorized
